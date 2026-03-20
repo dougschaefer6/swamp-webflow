@@ -2,8 +2,8 @@ import { z } from "npm:zod@4";
 import {
   sanitizeId,
   webflowApi,
-  webflowPaginated,
   WebflowGlobalArgsSchema,
+  webflowPaginated,
 } from "./_client.ts";
 
 const SeoSchema = z.object({
@@ -51,7 +51,7 @@ export const model = {
       arguments: z.object({
         siteId: z.string().describe("Webflow site ID"),
       }),
-      execute: async (args: any, context: any) => {
+      execute: async (args, context) => {
         const g = context.globalArgs;
         const pages = await webflowPaginated(
           `/sites/${encodeURIComponent(args.siteId)}/pages`,
@@ -79,7 +79,7 @@ export const model = {
       arguments: z.object({
         pageId: z.string().describe("Webflow page ID"),
       }),
-      execute: async (args: any, context: any) => {
+      execute: async (args, context) => {
         const g = context.globalArgs;
         const page = await webflowApi(
           `/pages/${encodeURIComponent(args.pageId)}`,
@@ -95,7 +95,8 @@ export const model = {
     },
 
     updateSettings: {
-      description: "Update page settings including SEO metadata and Open Graph.",
+      description:
+        "Update page settings including SEO metadata and Open Graph.",
       arguments: z.object({
         pageId: z.string().describe("Webflow page ID"),
         title: z.string().optional().describe("Page title"),
@@ -105,7 +106,7 @@ export const model = {
         ogTitle: z.string().optional().describe("Open Graph title"),
         ogDescription: z.string().optional().describe("Open Graph description"),
       }),
-      execute: async (args: any, context: any) => {
+      execute: async (args, context) => {
         const g = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -114,12 +115,16 @@ export const model = {
 
         const seo: Record<string, unknown> = {};
         if (args.seoTitle !== undefined) seo.title = args.seoTitle;
-        if (args.seoDescription !== undefined) seo.description = args.seoDescription;
+        if (args.seoDescription !== undefined) {
+          seo.description = args.seoDescription;
+        }
         if (Object.keys(seo).length > 0) body.seo = seo;
 
         const og: Record<string, unknown> = {};
         if (args.ogTitle !== undefined) og.title = args.ogTitle;
-        if (args.ogDescription !== undefined) og.description = args.ogDescription;
+        if (args.ogDescription !== undefined) {
+          og.description = args.ogDescription;
+        }
         if (Object.keys(og).length > 0) body.openGraph = og;
 
         const page = await webflowApi(
@@ -131,7 +136,9 @@ export const model = {
         const name = sanitizeId(page.slug as string || args.pageId);
         const handle = await context.writeResource("page", name, page);
 
-        context.logger.info("Updated page settings for {name}", { name: page.title });
+        context.logger.info("Updated page settings for {name}", {
+          name: page.title,
+        });
         return { dataHandles: [handle] };
       },
     },
@@ -141,7 +148,7 @@ export const model = {
       arguments: z.object({
         pageId: z.string().describe("Webflow page ID"),
       }),
-      execute: async (args: any, context: any) => {
+      execute: async (args, context) => {
         const g = context.globalArgs;
         const content = await webflowApi(
           `/pages/${encodeURIComponent(args.pageId)}/dom`,

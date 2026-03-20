@@ -2,8 +2,8 @@ import { z } from "npm:zod@4";
 import {
   sanitizeId,
   webflowApi,
-  webflowPaginated,
   WebflowGlobalArgsSchema,
+  webflowPaginated,
 } from "./_client.ts";
 
 const FieldSchema = z.object({
@@ -43,7 +43,7 @@ export const model = {
       arguments: z.object({
         siteId: z.string().describe("Webflow site ID"),
       }),
-      execute: async (args: any, context: any) => {
+      execute: async (args, context) => {
         const g = context.globalArgs;
         const collections = await webflowPaginated(
           `/sites/${encodeURIComponent(args.siteId)}/collections`,
@@ -71,7 +71,7 @@ export const model = {
       arguments: z.object({
         collectionId: z.string().describe("Webflow collection ID"),
       }),
-      execute: async (args: any, context: any) => {
+      execute: async (args, context) => {
         const g = context.globalArgs;
         const coll = await webflowApi(
           `/collections/${encodeURIComponent(args.collectionId)}`,
@@ -81,7 +81,9 @@ export const model = {
         const name = sanitizeId(coll.slug as string || args.collectionId);
         const handle = await context.writeResource("collection", name, coll);
 
-        context.logger.info("Retrieved collection {name}", { name: coll.displayName });
+        context.logger.info("Retrieved collection {name}", {
+          name: coll.displayName,
+        });
         return { dataHandles: [handle] };
       },
     },

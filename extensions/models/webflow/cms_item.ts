@@ -2,8 +2,8 @@ import { z } from "npm:zod@4";
 import {
   sanitizeId,
   webflowApi,
-  webflowPaginated,
   WebflowGlobalArgsSchema,
+  webflowPaginated,
 } from "./_client.ts";
 
 const CmsItemSchema = z.object({
@@ -35,7 +35,7 @@ export const model = {
       arguments: z.object({
         collectionId: z.string().describe("Webflow collection ID"),
       }),
-      execute: async (args: any, context: any) => {
+      execute: async (args, context) => {
         const g = context.globalArgs;
         const items = await webflowPaginated(
           `/collections/${encodeURIComponent(args.collectionId)}/items`,
@@ -43,10 +43,13 @@ export const model = {
           "items",
         ) as Record<string, unknown>[];
 
-        context.logger.info("Found {count} items in collection {collectionId}", {
-          count: items.length,
-          collectionId: args.collectionId,
-        });
+        context.logger.info(
+          "Found {count} items in collection {collectionId}",
+          {
+            count: items.length,
+            collectionId: args.collectionId,
+          },
+        );
 
         const handles = [];
         for (const item of items) {
@@ -66,10 +69,12 @@ export const model = {
         collectionId: z.string().describe("Webflow collection ID"),
         itemId: z.string().describe("Webflow item ID"),
       }),
-      execute: async (args: any, context: any) => {
+      execute: async (args, context) => {
         const g = context.globalArgs;
         const item = await webflowApi(
-          `/collections/${encodeURIComponent(args.collectionId)}/items/${encodeURIComponent(args.itemId)}`,
+          `/collections/${encodeURIComponent(args.collectionId)}/items/${
+            encodeURIComponent(args.itemId)
+          }`,
           g,
         ) as Record<string, unknown>;
 
@@ -87,10 +92,14 @@ export const model = {
       description: "Create a new CMS item in a collection.",
       arguments: z.object({
         collectionId: z.string().describe("Webflow collection ID"),
-        fieldData: z.record(z.string(), z.unknown()).describe("Field data for the new item"),
-        isDraft: z.boolean().optional().default(false).describe("Create as draft"),
+        fieldData: z.record(z.string(), z.unknown()).describe(
+          "Field data for the new item",
+        ),
+        isDraft: z.boolean().optional().default(false).describe(
+          "Create as draft",
+        ),
       }),
-      execute: async (args: any, context: any) => {
+      execute: async (args, context) => {
         const g = context.globalArgs;
         const item = await webflowApi(
           `/collections/${encodeURIComponent(args.collectionId)}/items`,
@@ -109,10 +118,13 @@ export const model = {
         const name = sanitizeId(slug);
         const handle = await context.writeResource("item", name, item);
 
-        context.logger.info("Created item {name} in collection {collectionId}", {
-          name: slug,
-          collectionId: args.collectionId,
-        });
+        context.logger.info(
+          "Created item {name} in collection {collectionId}",
+          {
+            name: slug,
+            collectionId: args.collectionId,
+          },
+        );
         return { dataHandles: [handle] };
       },
     },
@@ -122,12 +134,16 @@ export const model = {
       arguments: z.object({
         collectionId: z.string().describe("Webflow collection ID"),
         itemId: z.string().describe("Webflow item ID"),
-        fieldData: z.record(z.string(), z.unknown()).describe("Fields to update (partial)"),
+        fieldData: z.record(z.string(), z.unknown()).describe(
+          "Fields to update (partial)",
+        ),
       }),
-      execute: async (args: any, context: any) => {
+      execute: async (args, context) => {
         const g = context.globalArgs;
         const item = await webflowApi(
-          `/collections/${encodeURIComponent(args.collectionId)}/items/${encodeURIComponent(args.itemId)}`,
+          `/collections/${encodeURIComponent(args.collectionId)}/items/${
+            encodeURIComponent(args.itemId)
+          }`,
           g,
           {
             method: "PATCH",
@@ -151,18 +167,23 @@ export const model = {
         collectionId: z.string().describe("Webflow collection ID"),
         itemId: z.string().describe("Webflow item ID"),
       }),
-      execute: async (args: any, context: any) => {
+      execute: async (args, context) => {
         const g = context.globalArgs;
         await webflowApi(
-          `/collections/${encodeURIComponent(args.collectionId)}/items/${encodeURIComponent(args.itemId)}`,
+          `/collections/${encodeURIComponent(args.collectionId)}/items/${
+            encodeURIComponent(args.itemId)
+          }`,
           g,
           { method: "DELETE" },
         );
 
-        context.logger.info("Deleted item {itemId} from collection {collectionId}", {
-          itemId: args.itemId,
-          collectionId: args.collectionId,
-        });
+        context.logger.info(
+          "Deleted item {itemId} from collection {collectionId}",
+          {
+            itemId: args.itemId,
+            collectionId: args.collectionId,
+          },
+        );
 
         return {
           data: {
@@ -183,7 +204,7 @@ export const model = {
         collectionId: z.string().describe("Webflow collection ID"),
         itemIds: z.array(z.string()).describe("Array of item IDs to publish"),
       }),
-      execute: async (args: any, context: any) => {
+      execute: async (args, context) => {
         const g = context.globalArgs;
         const result = await webflowApi(
           `/collections/${encodeURIComponent(args.collectionId)}/items/publish`,
@@ -194,10 +215,13 @@ export const model = {
           },
         );
 
-        context.logger.info("Published {count} items in collection {collectionId}", {
-          count: args.itemIds.length,
-          collectionId: args.collectionId,
-        });
+        context.logger.info(
+          "Published {count} items in collection {collectionId}",
+          {
+            count: args.itemIds.length,
+            collectionId: args.collectionId,
+          },
+        );
 
         return {
           data: {
