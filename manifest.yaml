@@ -1,0 +1,17 @@
+manifestVersion: 1
+name: "@dougschaefer/webflow"
+version: "2026.03.20.1"
+description: "Webflow Data API v2 extension — site publishing, CMS collection schema discovery, CMS item CRUD with bulk publish, and page metadata with SEO/Open Graph management. Shared API client handles pagination and OAuth bearer auth via vault credentials."
+repository: https://github.com/dougschaefer6/swamp-webflow
+labels:
+  - webflow
+  - cms
+  - website
+  - seo
+  - content
+  - publishing
+models:
+  - webflow/site.ts
+  - webflow/collection.ts
+  - webflow/cms_item.ts
+  - webflow/page.ts
