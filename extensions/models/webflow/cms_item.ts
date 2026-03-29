@@ -19,7 +19,7 @@ const CmsItemSchema = z.object({
 
 export const model = {
   type: "@dougschaefer/webflow-cms-item",
-  version: "2026.03.20.1",
+  version: "2026.03.29.2",
   globalArguments: WebflowGlobalArgsSchema,
   resources: {
     item: {
@@ -193,6 +193,83 @@ export const model = {
               deletedAt: new Date().toISOString(),
             },
             name: "delete-result",
+          },
+        };
+      },
+    },
+
+    batchCreate: {
+      description:
+        "Create multiple CMS items in a single request. More efficient than looping individual creates.",
+      arguments: z.object({
+        collectionId: z.string().describe("Webflow collection ID"),
+        items: z.array(
+          z.object({
+            fieldData: z.record(z.string(), z.unknown()),
+            isDraft: z.boolean().optional().default(false),
+          }),
+        ).describe("Array of items to create"),
+      }),
+      execute: async (args, context) => {
+        const g = context.globalArgs;
+        const result = await webflowApi(
+          `/collections/${encodeURIComponent(args.collectionId)}/items`,
+          g,
+          {
+            method: "POST",
+            body: { items: args.items },
+          },
+        ) as { items?: Record<string, unknown>[] };
+
+        const created = result.items ?? [];
+        context.logger.info(
+          "Batch created {count} items in collection {collectionId}",
+          { count: created.length, collectionId: args.collectionId },
+        );
+
+        const handles = [];
+        for (const item of created) {
+          const fieldData = item.fieldData as Record<string, unknown> ?? {};
+          const slug = fieldData.slug as string ?? item.id as string;
+          const name = sanitizeId(slug);
+          const handle = await context.writeResource("item", name, item);
+          handles.push(handle);
+        }
+        return { dataHandles: handles };
+      },
+    },
+
+    batchDelete: {
+      description:
+        "Delete multiple CMS items in a single request. Verify item IDs before calling.",
+      arguments: z.object({
+        collectionId: z.string().describe("Webflow collection ID"),
+        itemIds: z.array(z.string()).describe("Array of item IDs to delete"),
+      }),
+      execute: async (args, context) => {
+        const g = context.globalArgs;
+        await webflowApi(
+          `/collections/${encodeURIComponent(args.collectionId)}/items`,
+          g,
+          {
+            method: "DELETE",
+            body: { itemIds: args.itemIds },
+          },
+        );
+
+        context.logger.info(
+          "Batch deleted {count} items from collection {collectionId}",
+          { count: args.itemIds.length, collectionId: args.collectionId },
+        );
+
+        return {
+          data: {
+            attributes: {
+              collectionId: args.collectionId,
+              deletedIds: args.itemIds,
+              deletedAt: new Date().toISOString(),
+            },
+            name: "batch-delete-result",
           },
         };
       },
