@@ -8,7 +8,7 @@ import { z } from "npm:zod@4.3.6";
  */
 
 export const WebflowGlobalArgsSchema = z.object({
-  token: z.string().describe(
+  token: z.string().meta({ sensitive: true }).describe(
     "Webflow OAuth bearer token. Use: ${{ vault.get(<client-vault>, webflow-token) }}",
   ),
   baseUrl: z
