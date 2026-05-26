@@ -29,7 +29,7 @@ const CmsItemSchema = z.object({
  */
 export const model = {
   type: "@dougschaefer/webflow-cms-item",
-  version: "2026.03.29.2",
+  version: "2026.05.26.1",
   globalArguments: WebflowGlobalArgsSchema,
   resources: {
     item: {

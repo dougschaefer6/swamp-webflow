@@ -45,7 +45,7 @@ const PageSchema = z.object({
  */
 export const model = {
   type: "@dougschaefer/webflow-page",
-  version: "2026.03.29.1",
+  version: "2026.05.26.1",
   reports: ["@dougschaefer/seo-audit", "@dougschaefer/seo-site-health"],
   globalArguments: WebflowGlobalArgsSchema,
   resources: {

@@ -43,7 +43,7 @@ const SiteSchema = z.object({
  */
 export const model = {
   type: "@dougschaefer/webflow-site",
-  version: "2026.03.20.1",
+  version: "2026.05.26.1",
   globalArguments: WebflowGlobalArgsSchema,
   resources: {
     site: {
