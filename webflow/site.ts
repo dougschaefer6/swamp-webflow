@@ -1,5 +1,6 @@
 import { z } from "npm:zod@4.3.6";
 import { sanitizeId, webflowApi, WebflowGlobalArgsSchema } from "./_client.ts";
+import type { WebflowGlobalArgs } from "./_client.ts";
 
 const CustomDomainSchema = z.object({
   id: z.string(),
@@ -43,7 +44,7 @@ const SiteSchema = z.object({
  */
 export const model = {
   type: "@dougschaefer/webflow-site",
-  version: "2026.05.26.1",
+  version: "2026.05.27.1",
   globalArguments: WebflowGlobalArgsSchema,
   resources: {
     site: {
@@ -103,6 +104,7 @@ export const model = {
 
     publish: {
       description: "Publish a site to its custom domains.",
+      labels: ["live"],
       arguments: z.object({
         siteId: z.string().describe("Webflow site ID"),
         domains: z.array(z.string()).optional().describe(
@@ -148,6 +150,39 @@ export const model = {
             name: "publish-result",
           },
         };
+      },
+    },
+  },
+
+  checks: {
+    "webflow-site-publish-preflight": {
+      description:
+        "Verify the Webflow API token can reach the target site before triggering a full-site publish.",
+      labels: ["live"],
+      appliesTo: ["publish"],
+      execute: async (context) => {
+        try {
+          const g = context.globalArgs as WebflowGlobalArgs;
+          const result = await webflowApi("/sites", g) as {
+            sites?: unknown[];
+          };
+          if (!Array.isArray(result.sites) || result.sites.length === 0) {
+            return {
+              pass: false,
+              errors: [
+                "Webflow token returned no accessible sites — verify token scope includes Sites:read and Publishing:write",
+              ],
+            };
+          }
+          return { pass: true };
+        } catch (err) {
+          return {
+            pass: false,
+            errors: [
+              `Webflow pre-publish check failed: ${String(err)}`,
+            ],
+          };
+        }
       },
     },
   },

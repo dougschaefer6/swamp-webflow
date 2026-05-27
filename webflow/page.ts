@@ -5,6 +5,7 @@ import {
   WebflowGlobalArgsSchema,
   webflowPaginated,
 } from "./_client.ts";
+import type { WebflowGlobalArgs } from "./_client.ts";
 
 const SeoSchema = z.object({
   title: z.string().nullable().optional(),
@@ -33,9 +34,19 @@ const PageSchema = z.object({
   openGraph: OpenGraphSchema.optional(),
 }).passthrough();
 
+/**
+ * `@dougschaefer/webflow-page` model — Webflow page-level operations
+ * via the Data API v2. List enumerates pages within a site with SEO
+ * and OpenGraph metadata. Get returns a single page with full
+ * settings. updateSettings mutates title/description/slug/SEO/OG
+ * fields without touching DOM content — safe for bulk SEO sweeps.
+ * getContent reads the static DOM node tree for a page so workflows
+ * can inspect what's actually rendered against the design system.
+ * Paired with the seo-audit and seo-site-health reports.
+ */
 export const model = {
   type: "@dougschaefer/webflow-page",
-  version: "2026.03.29.1",
+  version: "2026.05.27.1",
   reports: ["@dougschaefer/seo-audit", "@dougschaefer/seo-site-health"],
   globalArguments: WebflowGlobalArgsSchema,
   resources: {
@@ -98,6 +109,7 @@ export const model = {
     updateSettings: {
       description:
         "Update page settings including SEO metadata and Open Graph.",
+      labels: ["live"],
       arguments: z.object({
         pageId: z.string().describe("Webflow page ID"),
         title: z.string().optional().describe("Page title"),
@@ -166,6 +178,37 @@ export const model = {
             name: `page-content-${sanitizeId(args.pageId)}`,
           },
         };
+      },
+    },
+  },
+
+  checks: {
+    "webflow-page-token-valid": {
+      description:
+        "Verify the Webflow API token can reach the pages API before updating page settings.",
+      labels: ["live"],
+      appliesTo: ["updateSettings"],
+      execute: async (context) => {
+        try {
+          const g = context.globalArgs as WebflowGlobalArgs;
+          const result = await webflowApi("/sites", g) as {
+            sites?: unknown[];
+          };
+          if (!Array.isArray(result.sites)) {
+            return {
+              pass: false,
+              errors: [
+                "Webflow API returned unexpected response from /sites — token may lack required scope",
+              ],
+            };
+          }
+          return { pass: true };
+        } catch (err) {
+          return {
+            pass: false,
+            errors: [`Webflow API check failed: ${String(err)}`],
+          };
+        }
       },
     },
   },

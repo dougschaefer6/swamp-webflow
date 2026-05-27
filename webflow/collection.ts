@@ -25,9 +25,17 @@ const CollectionSchema = z.object({
   fields: z.array(FieldSchema),
 }).passthrough();
 
+/**
+ * `@dougschaefer/webflow-collection` model — discovers and inspects
+ * Webflow CMS collection schemas. List enumerates collections within
+ * a site. Get returns a collection's full field schema including
+ * field types, reference relations, validation, and required flags
+ * — the entry point for any workflow that needs to know what
+ * fieldData shape webflow-cms-item.create or .update expects.
+ */
 export const model = {
   type: "@dougschaefer/webflow-collection",
-  version: "2026.03.20.1",
+  version: "2026.05.27.1",
   globalArguments: WebflowGlobalArgsSchema,
   resources: {
     collection: {

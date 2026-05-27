@@ -5,6 +5,7 @@ import {
   WebflowGlobalArgsSchema,
   webflowPaginated,
 } from "./_client.ts";
+import type { WebflowGlobalArgs } from "./_client.ts";
 
 const CmsItemSchema = z.object({
   id: z.string(),
@@ -17,9 +18,19 @@ const CmsItemSchema = z.object({
   fieldData: z.record(z.string(), z.unknown()),
 }).passthrough();
 
+/**
+ * `@dougschaefer/webflow-cms-item` model — CMS item CRUD against
+ * Webflow's Data API v2. List enumerates items within a collection.
+ * Get returns a single item by id. Create posts a new item with
+ * field data matching the collection's schema (use webflow-collection
+ * to discover that schema first). Update mutates an existing item's
+ * fieldData; Delete removes one — both verify the item id before
+ * acting. Items are written in draft state and require a site
+ * publish to go live.
+ */
 export const model = {
   type: "@dougschaefer/webflow-cms-item",
-  version: "2026.03.29.2",
+  version: "2026.05.27.1",
   globalArguments: WebflowGlobalArgsSchema,
   resources: {
     item: {
@@ -89,7 +100,9 @@ export const model = {
     },
 
     create: {
-      description: "Create a new CMS item in a collection.",
+      description:
+        "Create a new CMS item in a collection. Idempotent: if an item with the same slug already exists it is returned rather than duplicated.",
+      labels: ["live"],
       arguments: z.object({
         collectionId: z.string().describe("Webflow collection ID"),
         fieldData: z.record(z.string(), z.unknown()).describe(
@@ -101,6 +114,39 @@ export const model = {
       }),
       execute: async (args, context) => {
         const g = context.globalArgs;
+
+        // Idempotency: if fieldData includes a slug, check whether an item with
+        // that slug already exists in the collection and return it without
+        // creating a duplicate.
+        const desiredSlug = args.fieldData.slug as string | undefined;
+        if (desiredSlug) {
+          try {
+            const existing = await webflowPaginated(
+              `/collections/${encodeURIComponent(args.collectionId)}/items`,
+              g,
+              "items",
+              { slug: desiredSlug },
+            ) as Record<string, unknown>[];
+            const match = existing.find((i) => {
+              const fd = i.fieldData as Record<string, unknown> ?? {};
+              return fd.slug === desiredSlug;
+            });
+            if (match) {
+              const matchSlug = (match.fieldData as Record<string, unknown>)
+                .slug as string ?? match.id as string;
+              const name = sanitizeId(matchSlug);
+              const handle = await context.writeResource("item", name, match);
+              context.logger.info(
+                "Item with slug {slug} already exists in collection {collectionId} — skipping create",
+                { slug: desiredSlug, collectionId: args.collectionId },
+              );
+              return { dataHandles: [handle] };
+            }
+          } catch {
+            // If the slug-filter lookup fails, fall through to normal create
+          }
+        }
+
         const item = await webflowApi(
           `/collections/${encodeURIComponent(args.collectionId)}/items`,
           g,
@@ -131,6 +177,7 @@ export const model = {
 
     update: {
       description: "Update an existing CMS item's field data.",
+      labels: ["live"],
       arguments: z.object({
         collectionId: z.string().describe("Webflow collection ID"),
         itemId: z.string().describe("Webflow item ID"),
@@ -162,20 +209,31 @@ export const model = {
     },
 
     delete: {
-      description: "Delete a CMS item. Verify the item ID before calling.",
+      description:
+        "Delete a CMS item. Verify the item ID before calling. Idempotent: succeeds silently if the item does not exist.",
+      labels: ["live"],
       arguments: z.object({
         collectionId: z.string().describe("Webflow collection ID"),
         itemId: z.string().describe("Webflow item ID"),
       }),
       execute: async (args, context) => {
         const g = context.globalArgs;
-        await webflowApi(
-          `/collections/${encodeURIComponent(args.collectionId)}/items/${
-            encodeURIComponent(args.itemId)
-          }`,
-          g,
-          { method: "DELETE" },
-        );
+        try {
+          await webflowApi(
+            `/collections/${encodeURIComponent(args.collectionId)}/items/${
+              encodeURIComponent(args.itemId)
+            }`,
+            g,
+            { method: "DELETE" },
+          );
+        } catch (err) {
+          // 404 means it's already gone — treat as success
+          if (!String(err).includes("404")) throw err;
+          context.logger.info(
+            "Item {itemId} not found in collection {collectionId} — already deleted",
+            { itemId: args.itemId, collectionId: args.collectionId },
+          );
+        }
 
         context.logger.info(
           "Deleted item {itemId} from collection {collectionId}",
@@ -201,6 +259,7 @@ export const model = {
     batchCreate: {
       description:
         "Create multiple CMS items in a single request. More efficient than looping individual creates.",
+      labels: ["live"],
       arguments: z.object({
         collectionId: z.string().describe("Webflow collection ID"),
         items: z.array(
@@ -242,6 +301,7 @@ export const model = {
     batchDelete: {
       description:
         "Delete multiple CMS items in a single request. Verify item IDs before calling.",
+      labels: ["live"],
       arguments: z.object({
         collectionId: z.string().describe("Webflow collection ID"),
         itemIds: z.array(z.string()).describe("Array of item IDs to delete"),
@@ -277,6 +337,7 @@ export const model = {
 
     publish: {
       description: "Publish one or more CMS items to make them live.",
+      labels: ["live"],
       arguments: z.object({
         collectionId: z.string().describe("Webflow collection ID"),
         itemIds: z.array(z.string()).describe("Array of item IDs to publish"),
@@ -311,6 +372,75 @@ export const model = {
             name: "publish-result",
           },
         };
+      },
+    },
+
+    sync: {
+      description:
+        "Re-list all items in a collection and refresh stored resources. Run after a create/update/delete cycle to bring CEL-readable state current.",
+      arguments: z.object({
+        collectionId: z.string().describe("Webflow collection ID"),
+      }),
+      execute: async (args, context) => {
+        const g = context.globalArgs;
+        const items = await webflowPaginated(
+          `/collections/${encodeURIComponent(args.collectionId)}/items`,
+          g,
+          "items",
+        ) as Record<string, unknown>[];
+
+        context.logger.info(
+          "Synced {count} items for collection {collectionId}",
+          { count: items.length, collectionId: args.collectionId },
+        );
+
+        const handles = [];
+        for (const item of items) {
+          const fieldData = item.fieldData as Record<string, unknown> ?? {};
+          const slug = fieldData.slug as string ?? item.id as string;
+          const name = sanitizeId(slug);
+          const handle = await context.writeResource("item", name, item);
+          handles.push(handle);
+        }
+        return { dataHandles: handles };
+      },
+    },
+  },
+
+  checks: {
+    "webflow-token-valid": {
+      description:
+        "Verify the Webflow API token can reach the sites endpoint before mutating CMS content.",
+      labels: ["live"],
+      appliesTo: [
+        "create",
+        "update",
+        "delete",
+        "batchCreate",
+        "batchDelete",
+        "publish",
+      ],
+      execute: async (context) => {
+        try {
+          const g = context.globalArgs as WebflowGlobalArgs;
+          const result = await webflowApi("/sites", g) as {
+            sites?: unknown[];
+          };
+          if (!Array.isArray(result.sites)) {
+            return {
+              pass: false,
+              errors: [
+                "Webflow API returned unexpected response from /sites — token may lack Sites scope",
+              ],
+            };
+          }
+          return { pass: true };
+        } catch (err) {
+          return {
+            pass: false,
+            errors: [`Webflow API token check failed: ${String(err)}`],
+          };
+        }
       },
     },
   },
