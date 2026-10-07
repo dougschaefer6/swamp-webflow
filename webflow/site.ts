@@ -1,6 +1,11 @@
 import { z } from "npm:zod@4.3.6";
-import { sanitizeId, webflowApi, WebflowGlobalArgsSchema } from "./_client.ts";
-import type { WebflowGlobalArgs } from "./_client.ts";
+import {
+  defineMethods,
+  sanitizeId,
+  webflowApi,
+  WebflowGlobalArgsSchema,
+} from "./_client.ts";
+import type { CheckContext, WebflowGlobalArgs } from "./_client.ts";
 
 const CustomDomainSchema = z.object({
   id: z.string(),
@@ -44,7 +49,15 @@ const SiteSchema = z.object({
  */
 export const model = {
   type: "@dougschaefer/webflow-site",
-  version: "2026.05.27.1",
+  version: "2026.10.07.1",
+  upgrades: [
+    {
+      toVersion: "2026.10.07.1",
+      description:
+        "Version aligned with the webflow-cms-item live/bulk method release; globalArguments unchanged",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
   globalArguments: WebflowGlobalArgsSchema,
   resources: {
     site: {
@@ -54,7 +67,7 @@ export const model = {
       garbageCollection: 10,
     },
   },
-  methods: {
+  methods: defineMethods({
     list: {
       description:
         "List all Webflow sites accessible to the authenticated token.",
@@ -152,7 +165,7 @@ export const model = {
         };
       },
     },
-  },
+  }),
 
   checks: {
     "webflow-site-publish-preflight": {
@@ -160,7 +173,7 @@ export const model = {
         "Verify the Webflow API token can reach the target site before triggering a full-site publish.",
       labels: ["live"],
       appliesTo: ["publish"],
-      execute: async (context) => {
+      execute: async (context: CheckContext) => {
         try {
           const g = context.globalArgs as WebflowGlobalArgs;
           const result = await webflowApi("/sites", g) as {

@@ -1,5 +1,6 @@
 import { z } from "npm:zod@4.3.6";
 import {
+  defineMethods,
   sanitizeId,
   webflowApi,
   WebflowGlobalArgsSchema,
@@ -35,7 +36,15 @@ const CollectionSchema = z.object({
  */
 export const model = {
   type: "@dougschaefer/webflow-collection",
-  version: "2026.05.27.1",
+  version: "2026.10.07.1",
+  upgrades: [
+    {
+      toVersion: "2026.10.07.1",
+      description:
+        "Version aligned with the webflow-cms-item live/bulk method release; globalArguments unchanged",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
   globalArguments: WebflowGlobalArgsSchema,
   resources: {
     collection: {
@@ -45,7 +54,7 @@ export const model = {
       garbageCollection: 10,
     },
   },
-  methods: {
+  methods: defineMethods({
     list: {
       description: "List all CMS collections for a site.",
       arguments: z.object({
@@ -95,5 +104,5 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-  },
+  }),
 };

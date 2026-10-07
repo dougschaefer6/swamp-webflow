@@ -1,11 +1,12 @@
 import { z } from "npm:zod@4.3.6";
 import {
+  defineMethods,
   sanitizeId,
   webflowApi,
   WebflowGlobalArgsSchema,
   webflowPaginated,
 } from "./_client.ts";
-import type { WebflowGlobalArgs } from "./_client.ts";
+import type { CheckContext, WebflowGlobalArgs } from "./_client.ts";
 
 const SeoSchema = z.object({
   title: z.string().nullable().optional(),
@@ -46,7 +47,15 @@ const PageSchema = z.object({
  */
 export const model = {
   type: "@dougschaefer/webflow-page",
-  version: "2026.05.27.1",
+  version: "2026.10.07.1",
+  upgrades: [
+    {
+      toVersion: "2026.10.07.1",
+      description:
+        "Version aligned with the webflow-cms-item live/bulk method release; globalArguments unchanged",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
   reports: ["@dougschaefer/seo-audit", "@dougschaefer/seo-site-health"],
   globalArguments: WebflowGlobalArgsSchema,
   resources: {
@@ -57,7 +66,7 @@ export const model = {
       garbageCollection: 20,
     },
   },
-  methods: {
+  methods: defineMethods({
     list: {
       description: "List all pages for a site.",
       arguments: z.object({
@@ -180,7 +189,7 @@ export const model = {
         };
       },
     },
-  },
+  }),
 
   checks: {
     "webflow-page-token-valid": {
@@ -188,7 +197,7 @@ export const model = {
         "Verify the Webflow API token can reach the pages API before updating page settings.",
       labels: ["live"],
       appliesTo: ["updateSettings"],
-      execute: async (context) => {
+      execute: async (context: CheckContext) => {
         try {
           const g = context.globalArgs as WebflowGlobalArgs;
           const result = await webflowApi("/sites", g) as {
