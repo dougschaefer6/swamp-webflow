@@ -13,6 +13,14 @@ const CustomDomainSchema = z.object({
   lastPublished: z.string().nullable(),
 }).passthrough();
 
+const PublishResultSchema = z.object({
+  siteId: z.string(),
+  domainIds: z.array(z.string()),
+  publishToWebflowSubdomain: z.boolean(),
+  publishedAt: z.string(),
+  response: z.unknown(),
+}).strict();
+
 const LocaleSchema = z.object({
   id: z.string(),
   cmsLocaleId: z.string(),
@@ -49,12 +57,18 @@ const SiteSchema = z.object({
  */
 export const model = {
   type: "@dougschaefer/webflow-site",
-  version: "2026.10.07.1",
+  version: "2026.10.08.1",
   upgrades: [
     {
       toVersion: "2026.10.07.1",
       description:
         "Version aligned with the webflow-cms-item live/bulk method release; globalArguments unchanged",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.08.1",
+      description:
+        "Version aligned with the webflow-page JSON-LD, custom code and DOM write release; globalArguments unchanged",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -65,6 +79,13 @@ export const model = {
       schema: SiteSchema,
       lifetime: "infinite",
       garbageCollection: 10,
+    },
+    publishResult: {
+      description:
+        "Outcome of a site publish: target domain IDs, subdomain flag and Webflow's 202 response",
+      schema: PublishResultSchema,
+      lifetime: "30d",
+      garbageCollection: 20,
     },
   },
   methods: defineMethods({
@@ -116,53 +137,77 @@ export const model = {
     },
 
     publish: {
-      description: "Publish a site to its custom domains.",
+      description:
+        "Publish a site to custom domains (by domain ID) and/or its webflow.io subdomain. Omitting domainIds publishes to every custom domain on the site; an empty domainIds list publishes to no custom domain, so pair it with publishToWebflowSubdomain for a staging-only publish.",
       labels: ["live"],
       arguments: z.object({
         siteId: z.string().describe("Webflow site ID"),
-        domains: z.array(z.string()).optional().describe(
-          "Custom domain URLs to publish to. Omit to publish to all.",
+        domainIds: z.array(z.string().min(1)).optional().describe(
+          "Custom domain IDs to publish to (from the site's customDomains). Omit to publish to all custom domains; [] publishes to none.",
         ),
-      }),
+        publishToWebflowSubdomain: z.boolean().optional().default(false)
+          .describe("Also publish to the site's webflow.io subdomain"),
+      }).strict(),
       execute: async (args, context) => {
         const g = context.globalArgs;
 
-        // If no domains specified, fetch site to get all custom domains
-        let domainList = args.domains;
-        if (!domainList || domainList.length === 0) {
+        // Webflow takes custom domain IDs, not URLs. Only an omitted
+        // domainIds means "every custom domain"; an empty list must never
+        // widen to production.
+        let domainIds = args.domainIds;
+        if (domainIds === undefined) {
           const site = await webflowApi(
             `/sites/${encodeURIComponent(args.siteId)}`,
             g,
           ) as Record<string, unknown>;
-          const customDomains = site.customDomains as { url: string }[] ?? [];
-          domainList = customDomains.map((d: { url: string }) => d.url);
+          const customDomains = (site.customDomains ?? []) as {
+            id?: unknown;
+          }[];
+          domainIds = customDomains
+            .map((d) => d.id)
+            .filter((id): id is string => typeof id === "string" && id !== "");
         }
 
-        const result = await webflowApi(
-          `/sites/${encodeURIComponent(args.siteId)}/publish`,
-          g,
+        if (domainIds.length === 0 && !args.publishToWebflowSubdomain) {
+          throw new Error(
+            `Nothing to publish for site ${args.siteId}: no custom domains selected and publishToWebflowSubdomain is false`,
+          );
+        }
+
+        const body: Record<string, unknown> = {
+          publishToWebflowSubdomain: args.publishToWebflowSubdomain,
+        };
+        if (domainIds.length > 0) body.customDomains = domainIds;
+
+        context.logger.info(
+          "Publishing site {siteId} to domains [{domains}] (webflow.io subdomain: {subdomain})",
           {
-            method: "POST",
-            body: { customDomains: domainList },
+            siteId: args.siteId,
+            domains: domainIds.join(", "),
+            subdomain: args.publishToWebflowSubdomain,
           },
         );
+        const response = await webflowApi(
+          `/sites/${encodeURIComponent(args.siteId)}/publish`,
+          g,
+          { method: "POST", body },
+        );
 
-        context.logger.info("Published site {siteId} to {domains}", {
-          siteId: args.siteId,
-          domains: domainList.join(", "),
-        });
-
-        return {
-          data: {
-            attributes: {
-              siteId: args.siteId,
-              publishedDomains: domainList,
-              publishedAt: new Date().toISOString(),
-              result,
-            },
-            name: "publish-result",
+        const handle = await context.writeResource(
+          "publishResult",
+          `publish-${sanitizeId(args.siteId)}`,
+          {
+            siteId: args.siteId,
+            domainIds,
+            publishToWebflowSubdomain: args.publishToWebflowSubdomain,
+            publishedAt: new Date().toISOString(),
+            response: response ?? null,
           },
-        };
+        );
+        context.logger.info("Publish of site {siteId} accepted", {
+          siteId: args.siteId,
+        });
+        return { dataHandles: [handle] };
       },
     },
   }),

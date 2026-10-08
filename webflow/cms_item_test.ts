@@ -602,7 +602,7 @@ Deno.test("every model ends its upgrades at the current version", async () => {
   for (const file of ["site.ts", "collection.ts", "cms_item.ts", "page.ts"]) {
     const mod = await import(`./${file}`);
     const upgrades = mod.model.upgrades as { toVersion: string }[];
-    assertEquals(mod.model.version, "2026.10.07.1", file);
+    assertEquals(mod.model.version, "2026.10.08.1", file);
     assertEquals(upgrades.at(-1)?.toVersion, mod.model.version, file);
   }
 });

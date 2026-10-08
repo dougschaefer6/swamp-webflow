@@ -153,13 +153,19 @@ async function findItemsBySlug(
  */
 export const model = {
   type: "@dougschaefer/webflow-cms-item",
-  version: "2026.10.07.1",
+  version: "2026.10.08.1",
   globalArguments: WebflowGlobalArgsSchema,
   upgrades: [
     {
       toVersion: "2026.10.07.1",
       description:
         "Added live-item methods (listLive, getLive, createLive, updateLive, unpublish), bulkUpdate, bulkCreate, the liveItem resource and the deleteResult/publishResult/unpublishResult records; globalArguments unchanged",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.08.1",
+      description:
+        "Version aligned with the webflow-page JSON-LD, custom code and DOM write release; globalArguments unchanged",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
